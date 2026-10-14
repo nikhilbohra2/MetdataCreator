@@ -298,6 +298,13 @@
     padding: 3px 4px;
   }
   .tag-hint { font-size: 10.5px; color: var(--text-faint); margin-top: 4px; }
+  .policy-section-heading{grid-column:1/-1;border-top:1px solid var(--line);margin-top:8px;padding-top:16px;display:flex;flex-direction:column;gap:2px}
+  .policy-section-heading span{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--text-dim);font-weight:700}
+  .policy-section-heading small{font-size:10.5px;color:var(--text-faint)}
+  .checkbox-field{justify-content:center}.check-label{display:flex!important;flex-direction:row!important;align-items:center;gap:9px;cursor:pointer;text-transform:none!important;letter-spacing:0!important;font-size:12px!important;font-weight:500!important;color:var(--text)!important;min-height:38px}
+  .check-label input{width:16px;height:16px;accent-color:var(--brass);cursor:pointer}.policy-field input[type=number]{font-family:var(--mono);font-size:13px;padding:8px 10px;border:1px solid var(--line);border-radius:3px;background:var(--paper);color:var(--text)}
+  .policy-field input[type=number]:focus{outline:none;border-color:var(--brass);background:var(--card)}
+
 
   /* JSON preview / raw edit */
   .json-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
@@ -629,16 +636,15 @@ function buildZip(files) {
    ========================================================================= */
 function defaultPolicy() {
   return {
+    // Sparse by design: only fields the user actually turns on get stored here.
+    // Untouched checkboxes/number fields must NOT appear with default values.
+    policy: {},
     issuerMetadata: {
-      country: "US",
-      state: "AR",
-      name: "Arkansas",
-      uniqueIdentifier: "US-Arkansas",
+      country: "US", state: "AR", name: "Arkansas", uniqueIdentifier: "US-Arkansas",
       webUrl: "https://www.dfa.arkansas.gov/office/driver-services/mobile-id/",
       logoUrl: "https://www.dfa.arkansas.gov/wp-content/uploads/DFA-Logo-Title.svg",
       supportedDocTypes: ["org.iso.18013.5.1.mDL"],
-      supportedCredentialTypes: ["Mobile Driving License"],
-      supportedWallets: []
+      supportedCredentialTypes: ["Mobile Driving License"], supportedWallets: []
     }
   };
 }
@@ -843,84 +849,52 @@ function field(label, valueHtml, fullRow) {
 }
 
 const TAG_FIELDS = ['supportedDocTypes', 'supportedCredentialTypes', 'supportedWallets'];
-const TEXT_FIELDS = [
-  ['country', 'Country'], ['state', 'State'], ['name', 'Name'],
-  ['uniqueIdentifier', 'Unique Identifier'], ['webUrl', 'Web URL'], ['logoUrl', 'Logo URL'],
+const TEXT_FIELDS = [['country','Country'],['state','State'],['name','Name'],['uniqueIdentifier','Unique Identifier'],['webUrl','Web URL'],['logoUrl','Logo URL']];
+const POLICY_FIELDS = [
+ ['docType','Document Type','list'],
+ ['allowDSWithSignatureOidNotInAllowedList','Allow DS with signature OID not in allowed list','boolean'],
+ ['rejectionOfExpiredDSAfterNumberOfDays','Reject expired DS after number of days','number'],
+ ['rejectionOfExpiredIACAAfterNumberOfDays','Reject expired IACA after number of days','number'],
+ ['allowWrongIACAKeyUsage','Allow wrong IACA key usage','boolean'],['allowWrongDSExtendedKeyUsage','Allow wrong DS extended key usage','boolean'],
+ ['allowDSIACACountryNameMismatch','Allow DS/IACA country name mismatch','boolean'],['allowDSCountryNameMissing','Allow DS country name missing','boolean'],
+ ['allowDSCommonNameMissing','Allow DS common name missing','boolean'],['allowWrongIACABasicConstraints','Allow wrong IACA basic constraints','boolean'],
+ ['allowMissingIACAIssuerAlternativeName','Allow missing IACA issuer alternative name','boolean'],['allowMissingDSIssuerAlternativeName','Allow missing DS issuer alternative name','boolean'],
+ ['allowIACADSStateOrProvinceNameMismatch','Allow IACA/DS state or province mismatch','boolean'],['allowDRStateOrProvinceNameToDSCertMismatch','Allow DR state/province to DS certificate mismatch','boolean'],
+ ['allowDSIssuerFieldIACASubjectFieldMismatch','Allow DS issuer field / IACA subject field mismatch','boolean'],['allowDRIssuingCountryToDSCertMismatch','Allow DR issuing country to DS certificate mismatch','boolean'],
+ ['allowDSWrongValidity','Allow DS wrong validity','boolean'],['allowWrongDSKeyUsage','Allow wrong DS key usage','boolean'],
+ ['allowRevokedIACAByCrl','Allow revoked IACA by CRL','boolean'],['allowRevokedDSByCrl','Allow revoked DS by CRL','boolean'],
+ ['allowMissingDSCrlDP','Allow missing DS CRL DP','boolean'],['allowMissingIACACrlDP','Allow missing IACA CRL DP','boolean'],
+ ['allowUnrecogiseCriticalExtension','Allow unrecognized critical extension','boolean'],['allowMissingMandatoryFieldsInDS','Allow missing mandatory fields in DS','boolean']
 ];
 
 function renderFormGrid(cert) {
-  const grid = $('#formGrid');
-  grid.innerHTML = '';
-  const meta = cert.policy.issuerMetadata;
-
-  TEXT_FIELDS.forEach(([key, label]) => {
-    const wrap = document.createElement('div');
-    wrap.className = 'form-field';
-    wrap.innerHTML = '<label>' + label + '</label><input type="text" data-field="' + key + '">';
-    const input = wrap.querySelector('input');
-    input.value = meta[key] || '';
-    input.addEventListener('input', () => {
-      meta[key] = input.value;
-      syncJsonFromModel(cert);
-    });
-    grid.appendChild(wrap);
-  });
-
-  const tagLabels = {
-    supportedDocTypes: 'Supported Doc Types',
-    supportedCredentialTypes: 'Supported Credential Types',
-    supportedWallets: 'Supported Wallets',
-  };
-  TAG_FIELDS.forEach((key) => {
-    const wrap = document.createElement('div');
-    wrap.className = 'form-field full';
-    wrap.innerHTML = '<label>' + tagLabels[key] + '</label><div class="tag-input-box" data-field="' + key + '"></div><div class="tag-hint">Press Enter or comma to add</div>';
-    grid.appendChild(wrap);
-    mountTagInput(wrap.querySelector('.tag-input-box'), meta[key] || [], (newTags) => {
-      meta[key] = newTags;
-      syncJsonFromModel(cert);
-    });
-  });
+ const grid=$('#formGrid'); grid.innerHTML=''; const meta=cert.policy.issuerMetadata;
+ const policy=cert.policy.policy || (cert.policy.policy=defaultPolicy().policy);
+ TEXT_FIELDS.forEach(([key,label])=>{const w=document.createElement('div');w.className='form-field';w.innerHTML='<label>'+label+'</label><input type="text">';const i=w.querySelector('input');i.value=meta[key]||'';i.addEventListener('input',()=>{meta[key]=i.value;syncJsonFromModel(cert)});grid.appendChild(w)});
+ const labels={supportedDocTypes:'Supported Doc Types',supportedCredentialTypes:'Supported Credential Types',supportedWallets:'Supported Wallets'};
+ TAG_FIELDS.forEach(key=>{const w=document.createElement('div');w.className='form-field full';w.innerHTML='<label>'+labels[key]+'</label><div class="tag-input-box"></div><div class="tag-hint">Press Enter or comma to add</div>';grid.appendChild(w);mountTagInput(w.querySelector('.tag-input-box'),meta[key]||[],v=>{meta[key]=v;syncJsonFromModel(cert)})});
+ const h=document.createElement('div');h.className='policy-section-heading';h.innerHTML='<span>Certificate Validation Policy</span><small>Configure validation rules for this certificate</small>';grid.appendChild(h);
+ POLICY_FIELDS.forEach(([key,label,type])=>{const w=document.createElement('div');w.className='form-field policy-field'+(type==='boolean'?' checkbox-field':'');
+   if(type==='boolean'){w.innerHTML='<label class="check-label"><input type="checkbox"><span>'+label+'</span></label>';const i=w.querySelector('input');i.checked=policy[key]===true;i.addEventListener('change',()=>{if(i.checked){policy[key]=true}else{delete policy[key]}syncJsonFromModel(cert)})}
+   else if(type==='number'){w.innerHTML='<label>'+label+'</label><input type="number" min="0" step="1">';const i=w.querySelector('input');i.value=Number.isFinite(policy[key])?policy[key]:'';i.placeholder='not set';i.addEventListener('input',()=>{const raw=i.value.trim();if(raw===''){delete policy[key]}else{const v=Math.max(0,parseInt(raw,10)||0);if(v>0){policy[key]=v}else{delete policy[key]}}syncJsonFromModel(cert)})}
+   else {w.className+=' full';w.innerHTML='<label>'+label+'</label><div class="tag-input-box"></div><div class="tag-hint">Press Enter or comma to add</div>';grid.appendChild(w);mountTagInput(w.querySelector('.tag-input-box'),policy[key]||[],v=>{if(v.length){policy[key]=v}else{delete policy[key]}syncJsonFromModel(cert)});return}
+   grid.appendChild(w); });
 }
 
-function mountTagInput(box, initialTags, onChange) {
-  let tags = initialTags.slice();
-  function renderChips() {
-    box.querySelectorAll('.tag-chip').forEach(n => n.remove());
-    const input = box.querySelector('input');
-    tags.forEach((t, idx) => {
-      const chip = document.createElement('span');
-      chip.className = 'tag-chip';
-      chip.innerHTML = esc(t) + '<span class="x">&times;</span>';
-      chip.querySelector('.x').addEventListener('click', () => {
-        tags.splice(idx, 1);
-        renderChips();
-        onChange(tags.slice());
-      });
-      box.insertBefore(chip, input);
-    });
-  }
-  const input = document.createElement('input');
-  input.type = 'text';
-  input.placeholder = 'add…';
-  box.appendChild(input);
-  function commit() {
-    const v = input.value.trim();
-    if (v) { tags.push(v); input.value = ''; renderChips(); onChange(tags.slice()); }
-  }
-  input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); commit(); }
-    else if (e.key === 'Backspace' && input.value === '' && tags.length) {
-      tags.pop(); renderChips(); onChange(tags.slice());
-    }
-  });
-  input.addEventListener('blur', commit);
-  renderChips();
+function mountTagInput(box,initialTags,onChange){let tags=initialTags.slice();function render(){box.querySelectorAll('.tag-chip').forEach(n=>n.remove());const input=box.querySelector('input');tags.forEach((t,idx)=>{const c=document.createElement('span');c.className='tag-chip';c.innerHTML=esc(t)+'<span class="x">&times;</span>';c.querySelector('.x').addEventListener('click',()=>{tags.splice(idx,1);render();onChange(tags.slice())});box.insertBefore(c,input)})}const input=document.createElement('input');input.type='text';input.placeholder='add…';box.appendChild(input);function commit(){const v=input.value.trim();if(v){tags.push(v);input.value='';render();onChange(tags.slice())}}input.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===','){e.preventDefault();commit()}else if(e.key==='Backspace'&&!input.value&&tags.length){tags.pop();render();onChange(tags.slice())}});input.addEventListener('blur',commit);render()}
+
+function buildExportObject(cert) {
+  // "policy" is only included when at least one policy option was actually selected.
+  const policy = cert.policy.policy || {};
+  const out = {};
+  if (Object.keys(policy).length > 0) out.policy = policy;
+  out.issuerMetadata = cert.policy.issuerMetadata;
+  return out;
 }
 
 function renderJsonTextarea(cert) {
   const ta = $('#jsonTextarea');
-  ta.value = JSON.stringify(cert.policy, null, 2);
+  ta.value = JSON.stringify(buildExportObject(cert), null, 2);
   ta.addEventListener('focus', () => { jsonHasFocus = true; });
   ta.addEventListener('blur', () => { jsonHasFocus = false; });
   ta.addEventListener('input', () => {
@@ -939,6 +913,8 @@ function applyJsonEdit(cert) {
       throw new Error('Expected an object with an "issuerMetadata" field.');
     }
     cert.policy = parsed;
+    // Keep the policy object sparse — don't backfill missing keys with defaults.
+    if (!cert.policy.policy || typeof cert.policy.policy !== 'object' || Array.isArray(cert.policy.policy)) cert.policy.policy = {};
     if (!Array.isArray(cert.policy.issuerMetadata.supportedDocTypes)) cert.policy.issuerMetadata.supportedDocTypes = [];
     if (!Array.isArray(cert.policy.issuerMetadata.supportedCredentialTypes)) cert.policy.issuerMetadata.supportedCredentialTypes = [];
     if (!Array.isArray(cert.policy.issuerMetadata.supportedWallets)) cert.policy.issuerMetadata.supportedWallets = [];
@@ -953,7 +929,7 @@ function applyJsonEdit(cert) {
 function syncJsonFromModel(cert) {
   if (jsonHasFocus) return; // don't fight the user while they're typing raw JSON
   const ta = $('#jsonTextarea');
-  if (ta) ta.value = JSON.stringify(cert.policy, null, 2);
+  if (ta) ta.value = JSON.stringify(buildExportObject(cert), null, 2);
 }
 
 /* =========================================================================
@@ -977,6 +953,7 @@ function commitPendingJsonEdit(cert) {
       throw new Error('Expected an object with an "issuerMetadata" field.');
     }
     cert.policy = parsed;
+    if (!cert.policy.policy || typeof cert.policy.policy !== 'object' || Array.isArray(cert.policy.policy)) cert.policy.policy = {};
     return true;
   } catch (e) {
     showToast('Fix the JSON before saving: ' + (e.message || e), true);
@@ -986,7 +963,7 @@ function commitPendingJsonEdit(cert) {
 
 function onSavePolicy(cert) {
   if (!commitPendingJsonEdit(cert)) return;
-  const json = JSON.stringify(cert.policy, null, 2);
+  const json = JSON.stringify(buildExportObject(cert), null, 2);
   downloadBlob(cert.baseName + '.pem.policy', json, 'application/json');
   showToast('Policy saved for ' + cert.baseName);
 }
@@ -1002,7 +979,7 @@ function onDownloadAll() {
   const files = [];
   state.certs.forEach((c) => {
     if (c.pemText) files.push({ name: c.baseName + '.pem', data: new TextEncoder().encode(c.pemText) });
-    files.push({ name: c.baseName + '.pem.policy', data: new TextEncoder().encode(JSON.stringify(c.policy, null, 2)) });
+    files.push({ name: c.baseName + '.pem.policy', data: new TextEncoder().encode(JSON.stringify(buildExportObject(c), null, 2)) });
   });
   if (files.length === 0) return;
   const zipBytes = buildZip(files);
